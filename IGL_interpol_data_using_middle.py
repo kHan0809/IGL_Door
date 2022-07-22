@@ -209,7 +209,9 @@ def fix_traj(new_traj, traj1,traj2,coef):
 
 
 data_concat = []
-subgoal = '1'
+# subgoal = '1'
+subgoal = '2'
+
 for pickle_data in os.listdir(os.getcwd()+'/data_IGL'):
     # if 'IGL' in pickle_data:
     if 'Inter_mid_sg'+subgoal in pickle_data:

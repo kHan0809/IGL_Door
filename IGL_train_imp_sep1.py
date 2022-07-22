@@ -13,12 +13,12 @@ class CustomDataSet(Dataset):
         return len(self.x)
     def __getitem__(self,idx):
         return self.x[idx], self.y[idx]
-subgoal = '0'
+subgoal = '1'
 dataset1 = CustomDataSet('np_x_sg'+subgoal+'_no_imp.npy','np_y_sg'+subgoal+'_no_imp.npy','./data_IGL/')
 dataset2 = CustomDataSet('np_x_sg'+subgoal+'_imp.npy','np_y_sg'+subgoal+'_imp.npy','./data_IGL/')
 
-grid_lr    = [0.0001, 0.00005,0.00001]
-grid_wd    = [1e-4,1e-5,1e-6]
+grid_lr    = [0.001, 0.0005,0.0001]
+grid_wd    = [1e-3,1e-4,1e-5]
 grid_batch = [1000,750,500]
 
 for x,batch in enumerate(grid_batch):

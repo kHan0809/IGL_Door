@@ -134,15 +134,18 @@ if __name__ == "__main__":
                 action_pos += 0.08*np.random.randn(action_pos.shape[0])
             # action_pos = (obs_obj[:3] - obs_robot[:3])
 
-            next_r = R.from_quat(next[3:7])
-            curr_r = R.from_quat(obs_robot[3:7])
-            # next_euler = next_r.as_euler('zyz',degrees=False)
-            # curr_euler = curr_r.as_euler('zyz',degrees=False)
-            curr_euler = curr_r.as_rotvec()
-            next_euler = next_r.as_rotvec()
-            action_rot  = (next_euler-curr_euler)
-            action_grip = np.array([next[-1]  - obs_robot[-1]])
+            # print(obs['robot0_eef_quat'])
+            next_r = R.from_quat(np.concatenate((next[4:7],np.array(next[3]).reshape(1))))
+            curr_r = R.from_quat(np.concatenate((obs_robot[4:7], np.array(obs_robot[3]).reshape(1))))
+            # next_r = R.from_quat(next[4:7])
+            # curr_r = R.from_quat(obs_robot_pos[3:7])
+            next_euler = next_r.as_euler('zyz',degrees=False)
+            curr_euler = curr_r.as_euler('zyz',degrees=False)
 
+
+            action_rot  = curr_euler-next_euler
+
+            action_grip = np.array([next[-1] - obs_robot[-1]])
 
             if action_rot[0]>2.0:
                 action_rot[0] -=np.pi*2
@@ -159,7 +162,7 @@ if __name__ == "__main__":
             elif action_rot[2]<-2.0:
                 action_rot[2] += np.pi * 2
             print("===============")
-            action_rot /=10
+            action_rot /=5
             # action_rot = np.array([0,0,0])
 
             action = np.concatenate((action_pos,action_rot,action_grip))

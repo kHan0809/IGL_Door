@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 import torch.nn as nn
 import os
 data_concat = []
-subgoal = '0'
+subgoal = '2'
 for pickle_data in os.listdir(os.getcwd()+'/data_IGL'):
     if 'Inter_using_mid_sg'+subgoal in pickle_data:
         print(pickle_data)

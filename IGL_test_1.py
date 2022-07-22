@@ -5,16 +5,12 @@ from Model.Model import IGL, InvDyn_add, IGL_large, IGL_large_sep
 import torch
 from robosuite.wrappers import VisualizationWrapper
 
-def get_current_stage(one_state):
-    flag = 0
-    inner = 0.021
-    inner_pro = 1.1
-    if abs(one_state[0] - one_state[9]) < inner and abs(one_state[1] - one_state[10]) < inner and abs(one_state[2] - one_state[11]) < inner:
-        flag = 1
-    if abs(one_state[0] - one_state[9]) < inner*inner_pro and abs(one_state[1] - one_state[10]) < inner*inner_pro and abs(one_state[2] - one_state[11]) < inner*inner_pro and abs(one_state[7]<0.024):
-        flag = 2
-    if abs(one_state[0] - one_state[9]) < inner*inner_pro and abs(one_state[1] - one_state[10]) < inner*inner_pro and abs(one_state[2] - one_state[11]) < inner*inner_pro and abs(one_state[7]<0.024) and abs(one_state[11] - one_state[-5])>0.035:
-        flag = 3
+def get_current_stage(one_state,curt_subgoal):
+    flag = curt_subgoal
+    if 0.03<(one_state[0] - one_state[9])<0.100 and  (one_state[1] - one_state[10])<0.023 and 0.005<(one_state[2] - one_state[11])<0.05 and flag == 0:
+        flag += 1
+    if one_state[12]>1.25 and flag == 1:
+        flag += 1
     return flag
 
 def _flatten_obs(obs_dict, name_list):
@@ -34,9 +30,9 @@ if __name__ == "__main__":
     print(suite.__logo__)
 
     # Choose environment and add it to options
-    # options["env_name"] = "Door"
+    options["env_name"] = "Door"
     # options["env_name"] = choose_environment()
-    options["env_name"] = "Stack_with_site"
+    # options["env_name"] = "Stack_with_site"
 
     # If a multi-arm environment has been chosen, choose configuration and appropriate robot(s)
     if "TwoArm" in options["env_name"]:
@@ -87,19 +83,17 @@ if __name__ == "__main__":
     # obs_robot_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos"]
     # obs_obj_list  = ["cubeA_pos", "cubeA_quat","cubeB_pos","cubeB_quat"]
 
-    obs_robot_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos","robot0_joint_pos_cos","robot0_joint_pos_sin","robot0_joint_vel","robot0_gripper_qvel"]
-    obs_obj_list  = ["cubeA_pos", "cubeA_quat","cubeB_pos","cubeB_quat"]
-    obs_robot_pos_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos"]
+    obs_robot_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos"]
+    obs_obj_list  = ["handle_pos", "handle_qpos","door_pos","hinge_qpos"]
 
     temp_list = ["robot0_eef_pos"]
 
     obs_robot = _flatten_obs(obs,obs_robot_list)
     obs_obj = _flatten_obs(obs,obs_obj_list)
 
-    obs_robot_pos = _flatten_obs(obs,obs_robot_pos_list)
 
-    one_state = np.concatenate((obs_robot_pos, obs_obj))
-    current_subgoal = np.array([get_current_stage(one_state)])
+    one_state = np.concatenate((obs_robot, obs_obj))
+    current_subgoal = np.array([get_current_stage(one_state,0)])
     # current_subgoal = np.array([0])
 
     env.viewer.set_camera(camera_id=0)
@@ -108,42 +102,35 @@ if __name__ == "__main__":
     # Get action limits
     low, high = env.action_spec
 
-    all_dim = 24 # 9 + 13 + 1
+    all_dim = 18 # 9+8+19 + 13 + 1
     robot_dim = 9
-    igl = IGL_large(all_dim, robot_dim, 'cpu')
+    igl = IGL_large_sep(all_dim, robot_dim, 'cpu')
     # igl = IGL_large_sep(all_dim, robot_dim, 'cpu')
     # igl.load_state_dict(torch.load('./model_save/SEP_IGL_sg0_imp000'))
-    igl.load_state_dict(torch.load('./model_save/IGL_sg0_imp000'))
+    igl.load_state_dict(torch.load('./model_save/FineSEP_IGL_sg0_imp001'))
 
-    state_dim = 32
-    next_state_dim = 9
-    action_dim = 7
-
-    Inv = InvDyn_add(state_dim,next_state_dim, action_dim, 'cpu')
-    # Inv.load_state_dict(torch.load('./model_save/InvDyn_4.pth'))
 
     igl.eval()
-    Inv.eval()
     from collections import deque
 
     abnormal = deque(maxlen=4)
     from scipy.spatial.transform import Rotation as R
     key = " "
     while True:
-        for i in range(500):
+        for i in range(1000):
             one_state = np.concatenate((one_state, current_subgoal))
             next_=igl(torch.FloatTensor(one_state).unsqueeze(0))
             # action=Inv.forward(torch.FloatTensor(obs_robot).unsqueeze(0),next_)
             next = next_.squeeze(0).detach().numpy()
-            action_pos = np.array([(next[0]-obs_robot_pos[0]),(next[1]-obs_robot_pos[1]),(next[2]-obs_robot_pos[2])])*3
-            # action_pos = (obs_obj[:3] - obs_robot_pos[:3])
+            action_pos = np.array([(next[0]-obs_robot[0]),(next[1]-obs_robot[1]),(next[2]-obs_robot[2])])*1
+            # action_pos = (obs_obj[:3] - obs_robot[:3])
 
             next_r = R.from_quat(next[3:7])
-            curr_r = R.from_quat(obs_robot_pos[3:7])
+            curr_r = R.from_quat(obs_robot[3:7])
             next_euler = next_r.as_euler('zyz',degrees=False)
             curr_euler = curr_r.as_euler('zyz',degrees=False)
             action_rot  = (next_euler-curr_euler)
-            action_grip = np.array([next[-1]  - obs_robot_pos[-1]])
+            action_grip = np.array([next[-1]  - obs_robot[-1]])
 
 
             if action_rot[0]>2.0:
@@ -162,7 +149,8 @@ if __name__ == "__main__":
                 action_rot[2] += np.pi * 2
             print(action_rot)
             print("===============")
-            # action_rot *=2
+            action_rot /=10
+            # action_rot = np.array([0,0,0])
 
             action = np.concatenate((action_pos,action_rot,action_grip))
 
@@ -173,10 +161,9 @@ if __name__ == "__main__":
             obs_robot = _flatten_obs(obs, obs_robot_list)
             obs_obj = _flatten_obs(obs, obs_obj_list)
 
-            obs_robot_pos = _flatten_obs(obs, obs_robot_pos_list)
             # print(abnormal)
-            one_state = np.concatenate((obs_robot_pos, obs_obj))
-            current_subgoal = np.array([get_current_stage(one_state)])
+            one_state = np.concatenate((obs_robot, obs_obj))
+            current_subgoal = np.array([get_current_stage(one_state,current_subgoal)])
 
             print(current_subgoal)
             current_subgoal = np.array([0])
@@ -185,8 +172,7 @@ if __name__ == "__main__":
         obs_robot = _flatten_obs(obs, obs_robot_list)
         obs_obj = _flatten_obs(obs, obs_obj_list)
 
-        obs_robot_pos = _flatten_obs(obs, obs_robot_pos_list)
 
-        one_state = np.concatenate((obs_robot_pos, obs_obj))
-        current_subgoal = np.array([get_current_stage(one_state)])
+        one_state = np.concatenate((obs_robot, obs_obj))
+        current_subgoal = np.array([get_current_stage(one_state,0)])
 
