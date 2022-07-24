@@ -63,37 +63,6 @@ def my_input2action():
     if 'n' in key:
         action *= np.array([1.0, 1.0,  1.0, 1.0, 1.0, 1.0, -1.0])
 
-    # if 'a' in key:
-    #     action = np.array([0.,-3.75, 0., 0., 0., 0., -1.0])
-    # if 'd' in key:
-    #     action = np.array([0., 3.75, 0., 0., 0., 0., -1.0])
-    # if 'w' in key:
-    #     action = np.array([-3.75, 0.,  0., 0., 0., 0., -1.0])
-    # if 's' in key:
-    #     action = np.array([3.75, 0.,  0., 0., 0., 0., -1.0])
-    # if 'r' in key:
-    #     action = np.array([0., 0.,  3.75, 0., 0., 0., -1.0])
-    # if 'f' in key:
-    #     action = np.array([0., 0., -3.75, 0., 0., 0., -1.0])
-    #
-    # if 'z' in key:
-    #     action = np.array([0., 0.,  0., -0.15, 0., 0., -1.0])
-    # if 'x' in key:
-    #     action = np.array([0., 0.,  0., 0.15, 0., 0., -1.0])
-    # if 'c' in key:
-    #     action = np.array([0., 0.,  0., 0., 0., -0.15, -1.0])
-    # if 'v' in key:
-    #     action = np.array([0., 0.,  0., 0., 0., 0.15, -1.0])
-    # if 't' in key:
-    #     action = np.array([0., 0.,  0., 0.,  0.15, 0., -1.0])
-    # if 'g' in key:
-    #     action = np.array([0., 0.,  0., 0., -0.15, 0., -1.0])
-    # if 'm' in key:
-    #     action = np.array([0., 0., 0., 0., 0.0, 0., 1.0])
-    # if ',' in key:
-    #     action = np.array([0., 0., 0., 0., 0.0, 0., -1.0])
-    # if 'n' in key:
-    #     action *= np.array([1.0, 1.0,  1.0, 1.0, 1.0, 1.0, -1.0])
 
     return action
 from scipy.spatial.transform import Rotation as R

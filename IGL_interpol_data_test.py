@@ -236,8 +236,7 @@ fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 
 All_traj = []
-coefs = np.linspace(0,1,2,endpoint=True)
-coefs = [0.1, 0.2, 0.9]
+coefs = np.linspace(0,1,3,endpoint=True)
 print(len(data_concat))
 for i in range(1,len(data_concat)-1):
     for j in range(i+1,len(data_concat)):
@@ -307,7 +306,7 @@ for i in range(1,len(data_concat)-1):
             ax.quiver(x, y, z, U, V, W, color='r')
 
 
-            num = -1
+            num = -20
             x,y,z = zip(*np.array(fixed_traj["obs_robot"])[num:,:3])
             ax.scatter(x, y, z, color='k', alpha=1.0)
             r = R.from_quat(np.array(fixed_traj["obs_robot"])[num:,3:7])
@@ -333,7 +332,7 @@ for i in range(1,len(data_concat)-1):
 
             x, y, z = zip(*np.array(obj_candi2[num:, :3]))
             ax.scatter(x, y, z, color='b', alpha=1.0)
-            defal = 0.1
+            defal = 0.07
 
             ax.set_xlim([-defal+x[0], defal+x[0]])
             ax.set_ylim([-defal+y[0], defal+y[0]])

@@ -1,25 +1,18 @@
 import numpy as np
 from robosuite.controllers import load_controller_config
 from robosuite.utils.input_utils import *
-from Model.Model import IGL, InvDyn_add, IGL_large
+from Model.Model import IGL, InvDyn_add, IGL_large, IGL_large_sep
 import torch
+from robosuite.wrappers import VisualizationWrapper
+from Common.quat2euler import  q2e
 
-def get_current_stage(one_state):
-    flag = 0
-    inner = 0.021
-    inner_pro = 1.1
-    # print("----aaaa----")
-    # print(one_state[:3])
-    # print(one_state[9:12])
-    # print(abs(one_state[:3]-one_state[9:12]))
-    if abs(one_state[0] - one_state[9]) < inner and abs(one_state[1] - one_state[10]) < inner and abs(one_state[2] - one_state[11]) < inner:
-        flag = 1
-    if abs(one_state[0] - one_state[9]) < inner*inner_pro and abs(one_state[1] - one_state[10]) < inner*inner_pro and abs(one_state[2] - one_state[11]) < inner*inner_pro and abs(one_state[7]<0.026):
-        flag = 2
-    if abs(one_state[0] - one_state[9]) < inner*inner_pro and abs(one_state[1] - one_state[10]) < inner*inner_pro and abs(one_state[2] - one_state[11]) < inner*inner_pro and abs(one_state[7]<0.026) and abs(one_state[11] - one_state[-5])>0.035:
-        flag = 3
+def get_current_stage(one_state,curt_subgoal):
+    flag = curt_subgoal
+    if 0.03<(one_state[0] - one_state[9])<0.135 and  (one_state[1] - one_state[10])<0.040 and 0.005<(one_state[2] - one_state[11])<0.07 and flag == 0:
+        flag += 1
+    if one_state[12]>1.25 and flag == 1:
+        flag += 1
     return flag
-
 
 def _flatten_obs(obs_dict, name_list):
     ob_lst = []
@@ -38,9 +31,9 @@ if __name__ == "__main__":
     print(suite.__logo__)
 
     # Choose environment and add it to options
-    # options["env_name"] = "Door"
+    options["env_name"] = "Door"
     # options["env_name"] = choose_environment()
-    options["env_name"] = "Stack"
+    # options["env_name"] = "Stack_with_site"
 
     # If a multi-arm environment has been chosen, choose configuration and appropriate robot(s)
     if "TwoArm" in options["env_name"]:
@@ -91,61 +84,47 @@ if __name__ == "__main__":
     # obs_robot_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos"]
     # obs_obj_list  = ["cubeA_pos", "cubeA_quat","cubeB_pos","cubeB_quat"]
 
-    obs_robot_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos","robot0_joint_pos_cos","robot0_joint_pos_sin","robot0_joint_vel","robot0_gripper_qvel"]
-    obs_obj_list  = ["cubeA_pos", "cubeA_quat","cubeB_pos","cubeB_quat"]
-    obs_robot_pos_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos"]
+    obs_robot_list = ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos"]
+    obs_obj_list  = ["handle_pos", "handle_qpos","door_pos","hinge_qpos"]
 
     temp_list = ["robot0_eef_pos"]
 
     obs_robot = _flatten_obs(obs,obs_robot_list)
     obs_obj = _flatten_obs(obs,obs_obj_list)
 
-    obs_robot_pos = _flatten_obs(obs,obs_robot_pos_list)
 
-    one_state = np.concatenate((obs_robot_pos, obs_obj))
-    current_subgoal = np.array([get_current_stage(one_state)])
+    one_state = np.concatenate((obs_robot, obs_obj))
+    current_subgoal = np.array([get_current_stage(one_state,0)])
     # current_subgoal = np.array([0])
 
     env.viewer.set_camera(camera_id=0)
+    env = VisualizationWrapper(env)
 
     # Get action limits
     low, high = env.action_spec
 
-    all_dim = 24 # 9 + 13 + 1
+    all_dim = 18 # 9+8+19 + 13 + 1
     robot_dim = 9
-    igl0 = IGL_large(all_dim, robot_dim, 'cpu')
-    igl0.load_state_dict(torch.load('./model_save/IGL_sg_imp210'))
-    igl1 = IGL_large(all_dim, robot_dim, 'cpu')
-    igl1.load_state_dict(torch.load('./model_save/IGL_sg1_imp123'))
-    igl2 = IGL_large(all_dim, robot_dim, 'cpu')
-    igl2.load_state_dict(torch.load('./model_save/IGL_sg2_imp101'))
-
-    state_dim = 32
-    next_state_dim = 9
-    action_dim = 7
-
-    Inv = InvDyn_add(state_dim,next_state_dim, action_dim, 'cpu')
-    # Inv.load_state_dict(torch.load('./model_save/InvDyn_4.pth'))
+    igl0 = IGL_large_sep(all_dim, robot_dim, 'cpu')
+    # igl = IGL_large_sep(all_dim, robot_dim, 'cpu')
+    # igl.load_state_dict(torch.load('./model_save/SEP_IGL_sg0_imp000'))
+    igl0.load_state_dict(torch.load('./model_save/SEP_IGL_sg0_imp001'))
+    igl1 = IGL_large_sep(all_dim, robot_dim, 'cpu')
+    igl1.load_state_dict(torch.load('./model_save/SEP_IGL_sg1_imp100'))
+    igl2 = IGL_large_sep(all_dim, robot_dim, 'cpu')
+    igl2.load_state_dict(torch.load('./model_save/SEP_IGL_sg2_imp100'))
 
 
     igl0.eval()
     igl1.eval()
     igl2.eval()
-    Inv.eval()
     from collections import deque
+
+    abnormal = deque(maxlen=4)
     from scipy.spatial.transform import Rotation as R
     key = " "
     while True:
-        abnormal_count = 0
-        abnormal_buffer = deque(maxlen=5)
-        abnormal_buffer.append(0),abnormal_buffer.append(1),abnormal_buffer.append(1),abnormal_buffer.append(1),abnormal_buffer.append(1)
-
-        maintain = deque(maxlen=3)
-        maintain.append(0),maintain.append(0),maintain.append(0)
-        for i in range(300):
-            # if maintain[0] != maintain[1] or maintain[0] != maintain[2] or maintain[2] != maintain[1]:
-            #     print("-----------")
-            #     current_subgoal = maintain[0]
+        for i in range(2000):
             one_state = np.concatenate((one_state, current_subgoal))
             if current_subgoal == 0:
                 next_= igl0(torch.FloatTensor(one_state).unsqueeze(0))
@@ -153,63 +132,23 @@ if __name__ == "__main__":
                 next_ = igl1(torch.FloatTensor(one_state).unsqueeze(0))
             elif current_subgoal == 2:
                 next_ = igl2(torch.FloatTensor(one_state).unsqueeze(0))
-            else:
-                print("달성~~~~~")
-                next_ = igl2(torch.FloatTensor(one_state).unsqueeze(0))
-
-
             # action=Inv.forward(torch.FloatTensor(obs_robot).unsqueeze(0),next_)
             next = next_.squeeze(0).detach().numpy()
-            action_pos = np.array([(next[0]-obs_robot_pos[0]),(next[1]-obs_robot_pos[1]),(next[2]-obs_robot_pos[2])])*10
-            # if current_subgoal == 2:
-            #     action_pos[0] = 0.0
-            #     action_pos[1] = 0.0
-            #     action_pos[2] = 0.5
-            # action_pos = (obs_obj[:3] - obs_robot_pos[:3])
+            action_pos = np.array([(next[0]-obs_robot[0]),(next[1]-obs_robot[1]),(next[2]-obs_robot[2])])*5
+            if current_subgoal == 1 or current_subgoal == 2:
+                action_pos *= 5
+                action_pos += 0.08*np.random.randn(action_pos.shape[0])
+            # # action_pos = (obs_obj[:3] - obs_robot[:3])
 
+            next_euler = q2e(*next[3:7])
+            curr_euler = q2e(*obs_robot[3:7])
+            # next_r = R.from_quat(next[3:7])
+            # curr_r = R.from_quat(obs_robot_pos[3:7])
+            # next_euler = next_r.as_euler('zyz',degrees=False)
+            # curr_euler = curr_r.as_euler('zyz',degrees=False)
+            action_rot = (next_euler - curr_euler)
+            action_grip = np.array([next[-1] - obs_robot[-1]])
 
-            next_r = R.from_quat(next[3:7])
-            curr_r = R.from_quat(obs_robot_pos[3:7])
-            next_euler = next_r.as_euler('zyz',degrees=False)
-            curr_euler = curr_r.as_euler('zyz',degrees=False)
-            action_rot  = next_euler-curr_euler
-            # temp = np.array([0,0,0])
-            # print("=================")
-            # print(next_euler)
-            # #
-            # # temp[0] = np.arcsin(np.sin(next_euler[0]))
-            # # print(np.cos(next_euler[0]))
-            # # print(temp[0])
-            # # print(np.cos([-0.9998921246479996]))
-            # # raise
-            # # temp[1] = np.arccos(np.cos(next_euler[1]))
-            # # temp[2] = np.arccos(np.cos(next_euler[2]))
-            # # print(temp)
-            # #
-            # print(curr_euler)
-            # print(action_rot)
-            # temp[0] = np.arccos(np.cos(curr_euler[0]))
-            # temp[1] = np.arccos(np.cos(curr_euler[1]))
-            # temp[2] = np.arccos(np.cos(curr_euler[2]))
-            # print(temp)
-
-            action_grip = np.array([next[-1]  - obs_robot_pos[-1]])
-            # print(action_rot)
-
-            # if action_rot[0]>3.0:
-            #     action_rot[0] -=np.pi
-            # elif action_rot[0]<-3.0:
-            #     action_rot[0] += np.pi
-            #
-            # if action_rot[1]>3.0:
-            #     action_rot[1] -=np.pi
-            # elif action_rot[1]<-3.0:
-            #     action_rot[1] += np.pi
-            #
-            # if action_rot[2]>3.0:
-            #     action_rot[2] -=np.pi
-            # elif action_rot[2]<-3.0:
-            #     action_rot[2] += np.pi
 
             if action_rot[0]>2.0:
                 action_rot[0] -=np.pi*2
@@ -225,70 +164,33 @@ if __name__ == "__main__":
                 action_rot[2] -=np.pi*2
             elif action_rot[2]<-2.0:
                 action_rot[2] += np.pi * 2
-
+            print("===============")
+            # action_rot /=10
+            # action_rot = np.array([0,0,0])
 
             action = np.concatenate((action_pos,action_rot,action_grip))
-            pre_obs = _flatten_obs(obs, obs_robot_pos_list)
-            # if sum(abnormal_buffer) < 0.0002: #0.000000000000001:
-            #     # action = np.random.rand(7)*0.15
-            #     action[2] = 1
-            #     action[5] = 0.0
-            #     # print("haha")
-            #     for m in range(5):
-            #         obs, reward, done, _ = env.step(action)
-            #         obs_robot = _flatten_obs(obs, obs_robot_list)
-            #         abnormal_buffer.append(abs(sum(obs_robot[:3] - pre_obs[:3])))
-            #         obs_obj = _flatten_obs(obs, obs_obj_list)
-            #         obs_robot_pos = _flatten_obs(obs, obs_robot_pos_list)
-            #         one_state = np.concatenate((obs_robot_pos, obs_obj))
-            #         current_subgoal = np.array([get_current_stage(one_state)])
-            #         env.render()
-            #     action[2] = 0
-            #     action[5] = 0.1
-            #     print("haha")
-            #     for m in range(5):
-            #         obs, reward, done, _ = env.step(action)
-            #         obs_robot = _flatten_obs(obs, obs_robot_list)
-            #         abnormal_buffer.append(abs(sum(obs_robot[:3] - pre_obs[:3])))
-            #         obs_obj = _flatten_obs(obs, obs_obj_list)
-            #         obs_robot_pos = _flatten_obs(obs, obs_robot_pos_list)
-            #         one_state = np.concatenate((obs_robot_pos, obs_obj))
-            #         current_subgoal = np.array([get_current_stage(one_state)])
-            #         env.render()
-            #
-            # else:
-            #     obs, reward, done, _ = env.step(action)
+
             obs, reward, done, _ = env.step(action)
-
-
+            print(action_pos)
+            print(obs['handle_qpos'])
+            print(obs['robot0_eef_pos'] - obs['handle_pos'])
 
 
 
             obs_robot = _flatten_obs(obs, obs_robot_list)
-            abnormal_buffer.append(abs(sum(obs_robot[:3]-pre_obs[:3])))
-
             obs_obj = _flatten_obs(obs, obs_obj_list)
 
-            obs_robot_pos = _flatten_obs(obs, obs_robot_pos_list)
-            one_state = np.concatenate((obs_robot_pos, obs_obj))
-            current_subgoal = np.array([get_current_stage(one_state)])
+            # print(abnormal)
+            one_state = np.concatenate((obs_robot, obs_obj))
+            current_subgoal = get_current_stage(one_state,current_subgoal)
+
             print(current_subgoal)
-
             env.render()
-            if abs(obs["cubeA_pos"][0]-obs["cubeB_pos"][0]) < 0.025 and abs(obs["cubeA_pos"][1]-obs["cubeB_pos"][1]) < 0.025 and abs(obs["cubeA_pos"][2]-obs["cubeB_pos"][2])<0.05:
-                current_subgoal = np.array([3])
-                print("==============done===============")
-                print(obs["cubeA_pos"])
-                print(obs["cubeB_pos"])
-
-
-
         obs = env.reset()
         obs_robot = _flatten_obs(obs, obs_robot_list)
         obs_obj = _flatten_obs(obs, obs_obj_list)
 
-        obs_robot_pos = _flatten_obs(obs, obs_robot_pos_list)
 
-        one_state = np.concatenate((obs_robot_pos, obs_obj))
-        current_subgoal = np.array([get_current_stage(one_state)])
+        one_state = np.concatenate((obs_robot, obs_obj))
+        current_subgoal = np.array([get_current_stage(one_state,0)])
 

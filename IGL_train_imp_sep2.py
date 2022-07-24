@@ -17,9 +17,9 @@ subgoal = '2'
 dataset1 = CustomDataSet('np_x_sg'+subgoal+'_no_imp.npy','np_y_sg'+subgoal+'_no_imp.npy','./data_IGL/')
 dataset2 = CustomDataSet('np_x_sg'+subgoal+'_imp.npy','np_y_sg'+subgoal+'_imp.npy','./data_IGL/')
 
-grid_lr    = [0.001, 0.0005,0.0001]
+grid_lr    = [0.0001, 0.00005,0.00001]
 grid_wd    = [1e-3,1e-4,1e-5]
-grid_batch = [1000,750,500]
+grid_batch = [500,400,1000]
 
 for x,batch in enumerate(grid_batch):
     train_loader1 = DataLoader(dataset1, shuffle = True,batch_size = batch)
